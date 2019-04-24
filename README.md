@@ -1,5 +1,6 @@
 # onecloud
 Join cloud services in one app
 
-Adding new cloud service by TOKEN
-Long click on file/folder - show menu (download, rename, delete)
+Adding new cloud service by TOKEN.
+
+Long click on file/folder - show menu (download, rename, delete).
