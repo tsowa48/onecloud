@@ -1,9 +1,11 @@
 package group.genco.onecloud;
 
+import android.Manifest;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
@@ -13,6 +15,8 @@ import android.os.Environment;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.design.widget.NavigationView;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v4.view.GravityCompat;
 import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.ActionBarDrawerToggle;
@@ -89,6 +93,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         });
         registerForContextMenu(listView);
 
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED)
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 0);
     }
 
     @Override
@@ -159,11 +166,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     iDrive newDrive;
                     switch(driveName) {//<------------------- TODO: add new drive HERE
                         case "Яндекс.Диск":
-                            newDrive = new Yandex(token);
+                            newDrive = new Yandex(token,this);
                             break;
                         case "Dropbox":
                         default:
-                            newDrive = new DropBox(token);
+                            newDrive = new DropBox(token, this);
                             break;
                     }
                     SharedPreferences prefs = this.getSharedPreferences("group.genco.onecloud", Context.MODE_PRIVATE);
@@ -259,9 +266,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         tokens.forEach((K, T) -> {
             Set<String> token = (Set<String>)T;
             if("Яндекс.Диск".equals(K)) {//<------------------- TODO: add new drive HERE
-                token.forEach(V -> cloud.add(new Yandex(V)));
+                token.forEach(V -> cloud.add(new Yandex(V, this)));
             } else if("Dropbox".equals(K)) {
-                token.forEach(V -> cloud.add(new DropBox(V)));
+                token.forEach(V -> cloud.add(new DropBox(V, this)));
             }
         });
 

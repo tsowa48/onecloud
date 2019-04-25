@@ -1,5 +1,7 @@
 package group.genco.onecloud.cloud;
 
+import android.content.Context;
+
 import java.net.URLEncoder;
 import java.util.*;
 import java.util.stream.*;
@@ -8,6 +10,7 @@ import group.genco.onecloud.R;
 import group.genco.onecloud.http;
 
 public class Yandex implements iDrive {
+    private Context _context;
 
     private String _userName = "";
     private String _token;
@@ -15,7 +18,8 @@ public class Yandex implements iDrive {
     private long _size;
     private long _used;
 
-    public Yandex(String accessToken){
+    public Yandex(String accessToken, Context context){
+        _context = context;
         _token = accessToken;
         try {
             String json = new http.GET().execute("https://cloud-api.yandex.net/v1/disk", "Authorization:OAuth " + _token).get();

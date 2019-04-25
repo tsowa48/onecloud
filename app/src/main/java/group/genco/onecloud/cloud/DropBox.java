@@ -1,5 +1,22 @@
 package group.genco.onecloud.cloud;
 
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.ProgressDialog;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.os.AsyncTask;
+import android.support.v4.app.NotificationCompat;
+import android.widget.ProgressBar;
+
+import java.io.BufferedReader;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
 import java.nio.file.Paths;
@@ -9,14 +26,22 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import group.genco.onecloud.MainActivity;
 import group.genco.onecloud.R;
 import group.genco.onecloud.http;
 
+import static android.app.Notification.GROUP_ALERT_SUMMARY;
+import static android.content.Context.NOTIFICATION_SERVICE;
+import static android.content.DialogInterface.*;
+
 public final class DropBox implements iDrive {
+    private Context _context;
+
     private String _userName = "";
     private String _token;
 
-    public DropBox(String accessToken) {
+    public DropBox(String accessToken, Context context) {
+        _context = context;
         _token = accessToken;
         try {
             String json = new http.POST().execute("https://api.dropboxapi.com/2/users/get_current_account", "null", "Content-Type:application/json; charset=utf-8", "Authorization:Bearer " + _token).get();
@@ -63,14 +88,24 @@ public final class DropBox implements iDrive {
 
     @Override
     public void download(String filePath, String realPath) {
-        try {//application/x-www-form-urlencoded
-            byte[] data = new http.POST2().execute("https://content.dropboxapi.com/2/files/download", "","Content-Type:application/octet-stream", "Content-Length:0",
-                    "Authorization:Bearer " + _token, "Dropbox-API-Arg:{\"path\":\"" + filePath.replaceAll("//","/") + "\"}").get();
-            if(data != null && data.length > 0)
-                Files.write(Paths.get(realPath), data, StandardOpenOption.WRITE, StandardOpenOption.CREATE);//<------------TODO: AccessDeniedException (write file)
-        } catch(Exception ex) {
-            ex.printStackTrace();
-        }
+        final NotificationCompat.Builder builder = new NotificationCompat.Builder(_context)//<------------ TODO: deprecated
+                .setSmallIcon(R.mipmap.ic_launcher_round)
+                .setContentTitle(filePath.substring(filePath.lastIndexOf("/") + 1))
+                .setContentText("Скачивание файла");
+        builder.setChannelId("group.genco.onecloud");
+        NotificationChannel channel = new NotificationChannel("group.genco.onecloud", "OneCloud", NotificationManager.IMPORTANCE_LOW);
+        channel.setSound(null,null);
+        builder.setGroupAlertBehavior(GROUP_ALERT_SUMMARY).setGroup("group.genco.onecloud").setGroupSummary(false);
+        builder.setProgress(0, 0, true);
+        builder.setSound(null);
+        NotificationManager manager = (NotificationManager)_context.getSystemService(NOTIFICATION_SERVICE);
+        manager.createNotificationChannel(channel);
+
+        DownloadTask dt = new DownloadTask(manager, builder);
+
+        manager.notify(1, builder.build());
+
+        dt.execute(filePath, realPath);
     }
 
     @Override
@@ -129,5 +164,85 @@ public final class DropBox implements iDrive {
         //FF0d2481
         //FFd9f8ff
         return R.drawable.ic_dropbox;
+    }
+
+
+    private class DownloadTask extends AsyncTask<String, Integer, Boolean> {
+
+        private NotificationCompat.Builder _builder;
+        private NotificationManager _manager;
+
+        public DownloadTask(NotificationManager manager, NotificationCompat.Builder builder) {
+            _manager = manager;
+            _builder = builder;
+        }
+
+        @Override
+        protected Boolean doInBackground(String... paths) {
+            InputStream in = null;
+            OutputStream os = null;
+            HttpURLConnection conn = null;
+            try {
+                URL url = new URL("https://content.dropboxapi.com/2/files/download");
+                conn = (HttpURLConnection)url.openConnection();
+                conn.addRequestProperty("Content-Type", "application/octet-stream");
+                conn.addRequestProperty("Content-Length", "0");
+                conn.addRequestProperty("Authorization", "Bearer " + _token);
+                conn.addRequestProperty("Dropbox-API-Arg", "{\"path\":\"" + paths[0].replaceAll("//","/") + "\"}");
+                conn.setRequestMethod("POST");
+                conn.getOutputStream().write("".getBytes(Charset.forName("utf-8")));
+                conn.connect();
+                if(conn.getResponseCode() != HttpURLConnection.HTTP_OK) {
+                    //BufferedReader br = new BufferedReader(new InputStreamReader(conn.getErrorStream()));
+                    //br.lines().forEach(X -> System.err.println(X));
+                    //br.close();
+                    return false;
+                }
+                int fileSize = conn.getContentLength();
+                in = conn.getInputStream();
+                os = new FileOutputStream(paths[1]);
+                byte[] data = new byte[4096];
+                long total = 0;
+                int count;
+                while((count = in.read(data)) != -1) {
+                    if(isCancelled()) {
+                        in.close();
+                        return false;
+                    }
+                    total += count;
+                    if(fileSize > 0)
+                        publishProgress((int)total * 100 / fileSize);
+                    os.write(data,0, count);
+                }
+            } catch(Exception ex) {
+                ex.printStackTrace();
+                return false;
+            } finally {
+                try {
+                    if (os != null)
+                        os.close();
+                    if(in != null)
+                        in.close();
+                } catch(Exception ex1){}
+                if(conn != null)
+                    conn.disconnect();
+                return true;
+            }
+        }
+
+        @Override
+        protected void onProgressUpdate(Integer... progress) {
+            super.onProgressUpdate(progress);
+
+            _builder.setContentText(progress[0].toString() + "%").setProgress(100, progress[0], false);
+            _manager.notify(1, _builder.build());
+        }
+
+        @Override
+        protected void onPostExecute(Boolean result) {
+            super.onPostExecute(result);
+            _builder.setContentText("Загрузка завершена").setVisibility(3000).setAutoCancel(true);
+            _manager.notify(1, _builder.build());
+        }
     }
 }
