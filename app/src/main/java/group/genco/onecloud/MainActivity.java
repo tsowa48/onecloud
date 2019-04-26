@@ -99,7 +99,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     @Override
-    protected void onResume() {
+    protected void onStart() {
         super.onResume();
         fullPath = new ArrayList<>();
         cloud = new Cloud();
